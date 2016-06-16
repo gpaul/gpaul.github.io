@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Clean shutdown example</title>
+  <meta name="description" content="In my last post I said you should shutdown your goroutines.">
+
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="canonical" href="http://gpaul.github.io/2014/12/24/clean-shutdown-example.html">
+  <link rel="alternate" type="application/rss+xml" title="Gustav Paul" href="http://gpaul.github.io/feed.xml">
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Gustav Paul</a>
+
+    <nav class="site-nav">
+      <a href="#" class="menu-icon">
+        <svg viewBox="0 0 18 15">
+          <path fill="#424242" d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.031C17.335,0,18,0.665,18,1.484L18,1.484z"/>
+          <path fill="#424242" d="M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0c0-0.82,0.665-1.484,1.484-1.484 h15.031C17.335,6.031,18,6.696,18,7.516L18,7.516z"/>
+          <path fill="#424242" d="M18,13.516C18,14.335,17.335,15,16.516,15H1.484C0.665,15,0,14.335,0,13.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.031C17.335,12.031,18,12.696,18,13.516L18,13.516z"/>
+        </svg>
+      </a>
+
+      <div class="trigger">
+        
+          
+          <a class="page-link" href="/about/">About</a>
+          
+        
+          
+        
+          
+        
+          
+        
+      </div>
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <div class="page-content">
+      <div class="wrapper">
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title" itemprop="name headline">Clean shutdown example</h1>
+    <p class="post-meta"><time datetime="2014-12-24T10:02:09+00:00" itemprop="datePublished">Dec 24, 2014</time></p>
+  </header>
+
+  <div class="post-content" itemprop="articleBody">
+    <p>In my last post I said you should shutdown your goroutines.</p>
+
+<p>Let’s build a little app that calculates checksums of all the files in a directory tree.</p>
+
+<figure class="highlight"><pre><code class="language-go" data-lang="go"><span class="k">package</span><span class="x"> </span><span class="n">main</span><span class="x">
+
+</span><span class="k">import</span><span class="x"> </span><span class="p">(</span><span class="x">
+	</span><span class="s">"crypto/md5"</span><span class="x">
+	</span><span class="s">"encoding/base64"</span><span class="x">
+	</span><span class="s">"flag"</span><span class="x">
+	</span><span class="s">"fmt"</span><span class="x">
+	</span><span class="s">"io"</span><span class="x">
+	</span><span class="s">"os"</span><span class="x">
+	</span><span class="s">"path/filepath"</span><span class="x">
+</span><span class="p">)</span><span class="x">
+
+</span><span class="k">func</span><span class="x"> </span><span class="n">main</span><span class="p">()</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="k">var</span><span class="x"> </span><span class="n">rootdir</span><span class="x"> </span><span class="kt">string</span><span class="x">
+	</span><span class="n">flag</span><span class="o">.</span><span class="n">StringVar</span><span class="p">(</span><span class="o">&amp;</span><span class="n">rootdir</span><span class="p">,</span><span class="x"> </span><span class="s">"dir"</span><span class="p">,</span><span class="x"> </span><span class="s">"."</span><span class="p">,</span><span class="x"> </span><span class="s">"directory to calculate checksums of"</span><span class="p">)</span><span class="x">
+	</span><span class="n">flag</span><span class="o">.</span><span class="n">Parse</span><span class="p">()</span><span class="x">
+
+	</span><span class="c">// expand paths like "." and "./foo" to "/home" and "/home/foo"</span><span class="x">
+	</span><span class="n">rootdir</span><span class="p">,</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="n">filepath</span><span class="o">.</span><span class="n">Abs</span><span class="p">(</span><span class="n">rootdir</span><span class="p">)</span><span class="x">
+	</span><span class="k">if</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="o">!=</span><span class="x"> </span><span class="no">nil</span><span class="x"> </span><span class="p">{</span><span class="x">
+		</span><span class="nb">panic</span><span class="p">(</span><span class="n">fmt</span><span class="o">.</span><span class="n">Errorf</span><span class="p">(</span><span class="s">"cannot expand '%s' to absolute path: %v"</span><span class="p">,</span><span class="x"> </span><span class="n">rootdir</span><span class="p">,</span><span class="x"> </span><span class="n">err</span><span class="p">))</span><span class="x">
+	</span><span class="p">}</span><span class="x">
+
+	</span><span class="c">// check that the path exists</span><span class="x">
+	</span><span class="n">stat</span><span class="p">,</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="n">os</span><span class="o">.</span><span class="n">Stat</span><span class="p">(</span><span class="n">rootdir</span><span class="p">)</span><span class="x">
+	</span><span class="k">if</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="o">!=</span><span class="x"> </span><span class="no">nil</span><span class="x"> </span><span class="p">{</span><span class="x">
+		</span><span class="nb">panic</span><span class="p">(</span><span class="n">fmt</span><span class="o">.</span><span class="n">Errorf</span><span class="p">(</span><span class="s">"cannot stat '%s': %v"</span><span class="p">,</span><span class="x"> </span><span class="n">rootdir</span><span class="p">,</span><span class="x"> </span><span class="n">err</span><span class="p">))</span><span class="x">
+	</span><span class="p">}</span><span class="x">
+	</span><span class="k">if</span><span class="x"> </span><span class="o">!</span><span class="n">stat</span><span class="o">.</span><span class="n">IsDir</span><span class="p">()</span><span class="x"> </span><span class="p">{</span><span class="x">
+		</span><span class="nb">panic</span><span class="p">(</span><span class="n">fmt</span><span class="o">.</span><span class="n">Errorf</span><span class="p">(</span><span class="s">"%s is not a directory"</span><span class="p">,</span><span class="x"> </span><span class="n">rootdir</span><span class="p">))</span><span class="x">
+	</span><span class="p">}</span><span class="x">
+
+	</span><span class="n">checksums</span><span class="p">,</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="n">WalkPath</span><span class="p">(</span><span class="n">rootdir</span><span class="p">)</span><span class="x">
+	</span><span class="k">if</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="o">!=</span><span class="x"> </span><span class="no">nil</span><span class="x"> </span><span class="p">{</span><span class="x">
+		</span><span class="nb">panic</span><span class="p">(</span><span class="n">fmt</span><span class="o">.</span><span class="n">Errorf</span><span class="p">(</span><span class="s">"could not calculate checksums: %v"</span><span class="p">,</span><span class="x"> </span><span class="n">err</span><span class="p">))</span><span class="x">
+	</span><span class="p">}</span><span class="x">
+	</span><span class="k">for</span><span class="x"> </span><span class="n">_</span><span class="p">,</span><span class="x"> </span><span class="n">checksum</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="k">range</span><span class="x"> </span><span class="n">checksums</span><span class="x"> </span><span class="p">{</span><span class="x">
+		</span><span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">checksum</span><span class="o">.</span><span class="n">String</span><span class="p">())</span><span class="x">
+	</span><span class="p">}</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="k">type</span><span class="x"> </span><span class="n">checksum</span><span class="x"> </span><span class="k">struct</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="n">filepath</span><span class="x"> </span><span class="kt">string</span><span class="x">
+	</span><span class="n">sum</span><span class="x">      </span><span class="p">[]</span><span class="kt">byte</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="k">func</span><span class="x"> </span><span class="p">(</span><span class="n">c</span><span class="x"> </span><span class="o">*</span><span class="n">checksum</span><span class="p">)</span><span class="x"> </span><span class="n">String</span><span class="p">()</span><span class="x"> </span><span class="kt">string</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="k">return</span><span class="x"> </span><span class="n">base64</span><span class="o">.</span><span class="n">StdEncoding</span><span class="o">.</span><span class="n">EncodeToString</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">sum</span><span class="p">)</span><span class="x"> </span><span class="o">+</span><span class="x"> </span><span class="s">" "</span><span class="x"> </span><span class="o">+</span><span class="x"> </span><span class="n">c</span><span class="o">.</span><span class="n">filepath</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="k">func</span><span class="x"> </span><span class="n">WalkPath</span><span class="p">(</span><span class="n">path</span><span class="x"> </span><span class="kt">string</span><span class="p">)</span><span class="x"> </span><span class="p">([]</span><span class="n">checksum</span><span class="p">,</span><span class="x"> </span><span class="kt">error</span><span class="p">)</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="k">var</span><span class="x"> </span><span class="n">sums</span><span class="x"> </span><span class="p">[]</span><span class="n">checksum</span><span class="x">
+	</span><span class="c">// fn is called for every file</span><span class="x">
+	</span><span class="n">fn</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="k">func</span><span class="p">(</span><span class="n">path</span><span class="x"> </span><span class="kt">string</span><span class="p">,</span><span class="x"> </span><span class="n">info</span><span class="x"> </span><span class="n">os</span><span class="o">.</span><span class="n">FileInfo</span><span class="p">,</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="kt">error</span><span class="p">)</span><span class="x"> </span><span class="kt">error</span><span class="x"> </span><span class="p">{</span><span class="x">
+		</span><span class="k">if</span><span class="x"> </span><span class="n">info</span><span class="o">.</span><span class="n">IsDir</span><span class="p">()</span><span class="x"> </span><span class="p">{</span><span class="x">
+			</span><span class="c">// we don't checksum directories, only files</span><span class="x">
+			</span><span class="k">return</span><span class="x"> </span><span class="no">nil</span><span class="x">
+		</span><span class="p">}</span><span class="x">
+
+		</span><span class="c">// open the file</span><span class="x">
+		</span><span class="n">file</span><span class="p">,</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="n">os</span><span class="o">.</span><span class="n">Open</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="x">
+		</span><span class="k">if</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="o">!=</span><span class="x"> </span><span class="no">nil</span><span class="x"> </span><span class="p">{</span><span class="x">
+			</span><span class="k">return</span><span class="x"> </span><span class="n">err</span><span class="x">
+		</span><span class="p">}</span><span class="x">
+		</span><span class="k">defer</span><span class="x"> </span><span class="n">file</span><span class="o">.</span><span class="n">Close</span><span class="p">()</span><span class="x">
+
+		</span><span class="c">// checksum its contents</span><span class="x">
+		</span><span class="n">hash</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="n">md5</span><span class="o">.</span><span class="n">New</span><span class="p">()</span><span class="x">
+		</span><span class="k">if</span><span class="x"> </span><span class="n">_</span><span class="p">,</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="n">io</span><span class="o">.</span><span class="n">Copy</span><span class="p">(</span><span class="n">hash</span><span class="p">,</span><span class="x"> </span><span class="n">file</span><span class="p">);</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="o">!=</span><span class="x"> </span><span class="no">nil</span><span class="x"> </span><span class="p">{</span><span class="x">
+			</span><span class="k">return</span><span class="x"> </span><span class="n">err</span><span class="x">
+		</span><span class="p">}</span><span class="x">
+		</span><span class="n">sum</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="n">hash</span><span class="o">.</span><span class="n">Sum</span><span class="p">(</span><span class="no">nil</span><span class="p">)</span><span class="x">
+
+		</span><span class="c">// save the result</span><span class="x">
+		</span><span class="n">sums</span><span class="x"> </span><span class="o">=</span><span class="x"> </span><span class="nb">append</span><span class="p">(</span><span class="n">sums</span><span class="p">,</span><span class="x"> </span><span class="n">checksum</span><span class="p">{</span><span class="n">path</span><span class="p">,</span><span class="x"> </span><span class="n">sum</span><span class="p">})</span><span class="x">
+		</span><span class="k">return</span><span class="x"> </span><span class="no">nil</span><span class="x">
+	</span><span class="p">}</span><span class="x">
+	</span><span class="n">err</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="n">filepath</span><span class="o">.</span><span class="n">Walk</span><span class="p">(</span><span class="n">path</span><span class="p">,</span><span class="x"> </span><span class="n">fn</span><span class="p">)</span><span class="x">
+	</span><span class="k">if</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="o">!=</span><span class="x"> </span><span class="no">nil</span><span class="x"> </span><span class="p">{</span><span class="x">
+		</span><span class="k">return</span><span class="x"> </span><span class="no">nil</span><span class="p">,</span><span class="x"> </span><span class="n">err</span><span class="x">
+	</span><span class="p">}</span><span class="x">
+	</span><span class="k">return</span><span class="x"> </span><span class="n">sums</span><span class="p">,</span><span class="x"> </span><span class="no">nil</span><span class="x">
+</span><span class="p">}</span></code></pre></figure>
+
+<p>Here’s some sample output:</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="o">[</span>gustav@gpaul-dell <span class="nb">test</span><span class="o">]</span><span class="nv">$ </span>go run walk.go 
+wVenkDHhxA+FkxgpvF/FUg<span class="o">==</span> /dev/shm/test/bar
+KnJaKj3+S4Dgehm7s3BsWw<span class="o">==</span> /dev/shm/test/baz/more
+07BzhNET7exJ6qYjitX/AA<span class="o">==</span> /dev/shm/test/foo
+KbumPnhXCnP/gJ5IMLsSyw<span class="o">==</span> /dev/shm/test/walk.go</code></pre></figure>
+
+<p>You’ll notice that all the entries are sorted lexicographically. This property is inherited from the os.Walk function which walks paths in that order.</p>
+
+<p>If these files are large and span several disks its is worth calculating the checksums concurrently. I’m going to modify the WalkPath() function only. For every file I now spawn a goroutine to calculate its checksum. The first error to occur 
+will be returned to the WalkFunc and the Walk will terminate.</p>
+
+<p>Results are accumulated into a shared struct that is protected by a Mutex. The ‘pure CSP’ way would be to
+have an additional goroutine that accumulates results, but this gets really messy when you try to wait
+for all goroutines to terminate, given that some could return errors and others results. Sometimes a good old mutex
+is really the simplest solution. UPDATE: see my next post for what is probably a more go-like architecture.</p>
+
+<p>After the walk terminates, whether by error or by natural completion, we wait for all the spawned goroutines to exit by calling c.wg.Wait().</p>
+
+<p>I’ve introduced the idea of a control structure ‘type ctrl struct’ to wrap some of the boiler plate around managing
+a concurrent job.</p>
+
+<figure class="highlight"><pre><code class="language-go" data-lang="go"><span class="c">// ctrl consolidates the output, the error channel and the termination WaitGroup</span><span class="x">
+</span><span class="c">// into a single structure for convenience</span><span class="x">
+</span><span class="k">type</span><span class="x"> </span><span class="n">ctrl</span><span class="x"> </span><span class="k">struct</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="c">// used to accumulate our results</span><span class="x">
+	</span><span class="n">acc</span><span class="x"> </span><span class="o">*</span><span class="n">checksums</span><span class="x">
+	</span><span class="c">// used to report errors</span><span class="x">
+	</span><span class="n">errs</span><span class="x"> </span><span class="k">chan</span><span class="x"> </span><span class="kt">error</span><span class="x">
+	</span><span class="c">// used to wait for goroutines to exit</span><span class="x">
+	</span><span class="n">wg</span><span class="x"> </span><span class="o">*</span><span class="n">sync</span><span class="o">.</span><span class="n">WaitGroup</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="c">// WalkPath walks a directory tree and returns the</span><span class="x">
+</span><span class="c">// checksum and filepath of every file in the tree.</span><span class="x">
+</span><span class="k">func</span><span class="x"> </span><span class="n">WalkPath</span><span class="p">(</span><span class="n">path</span><span class="x"> </span><span class="kt">string</span><span class="p">)</span><span class="x"> </span><span class="p">([]</span><span class="n">checksum</span><span class="p">,</span><span class="x"> </span><span class="kt">error</span><span class="p">)</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="c">// setup the control structure</span><span class="x">
+	</span><span class="n">c</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="n">ctrl</span><span class="p">{</span><span class="x">
+		</span><span class="o">&amp;</span><span class="n">checksums</span><span class="p">{},</span><span class="x">
+		</span><span class="nb">make</span><span class="p">(</span><span class="k">chan</span><span class="x"> </span><span class="kt">error</span><span class="p">,</span><span class="x"> </span><span class="m">1</span><span class="p">),</span><span class="x">
+		</span><span class="o">&amp;</span><span class="n">sync</span><span class="o">.</span><span class="n">WaitGroup</span><span class="p">{},</span><span class="x">
+	</span><span class="p">}</span><span class="x">
+
+	</span><span class="c">// fn is our os.WalkFunc, it will be called for every file and directory.</span><span class="x">
+	</span><span class="c">// It starts a goroutine for every file that calculates the file's checksum.</span><span class="x">
+	</span><span class="n">fn</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="k">func</span><span class="p">(</span><span class="n">path</span><span class="x"> </span><span class="kt">string</span><span class="p">,</span><span class="x"> </span><span class="n">info</span><span class="x"> </span><span class="n">os</span><span class="o">.</span><span class="n">FileInfo</span><span class="p">,</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="kt">error</span><span class="p">)</span><span class="x"> </span><span class="kt">error</span><span class="x"> </span><span class="p">{</span><span class="x">
+		</span><span class="k">if</span><span class="x"> </span><span class="n">info</span><span class="o">.</span><span class="n">IsDir</span><span class="p">()</span><span class="x"> </span><span class="p">{</span><span class="x">
+			</span><span class="c">// we don't checksum directories, only files</span><span class="x">
+			</span><span class="k">return</span><span class="x"> </span><span class="no">nil</span><span class="x">
+		</span><span class="p">}</span><span class="x">
+		</span><span class="k">if</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="o">!=</span><span class="x"> </span><span class="no">nil</span><span class="x"> </span><span class="p">{</span><span class="x">
+			</span><span class="k">return</span><span class="x"> </span><span class="n">err</span><span class="x">
+		</span><span class="p">}</span><span class="x">
+		</span><span class="c">// have any workers returned errors?</span><span class="x">
+		</span><span class="k">select</span><span class="x"> </span><span class="p">{</span><span class="x">
+		</span><span class="k">case</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="o">=</span><span class="x"> </span><span class="o">&lt;-</span><span class="n">c</span><span class="o">.</span><span class="n">errs</span><span class="o">:</span><span class="x">
+			</span><span class="c">// yes, return that error and terminate the walk</span><span class="x">
+			</span><span class="k">return</span><span class="x"> </span><span class="n">err</span><span class="x">
+		</span><span class="k">default</span><span class="o">:</span><span class="x">
+			</span><span class="c">// nope, still going strong</span><span class="x">
+		</span><span class="p">}</span><span class="x">
+		</span><span class="n">c</span><span class="o">.</span><span class="n">wg</span><span class="o">.</span><span class="n">Add</span><span class="p">(</span><span class="m">1</span><span class="p">)</span><span class="x">
+		</span><span class="k">go</span><span class="x"> </span><span class="n">checksumFile</span><span class="p">(</span><span class="n">path</span><span class="p">,</span><span class="x"> </span><span class="n">c</span><span class="p">)</span><span class="x">
+		</span><span class="k">return</span><span class="x"> </span><span class="no">nil</span><span class="x">
+	</span><span class="p">}</span><span class="x">
+	</span><span class="n">err</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="n">filepath</span><span class="o">.</span><span class="n">Walk</span><span class="p">(</span><span class="n">path</span><span class="p">,</span><span class="x"> </span><span class="n">fn</span><span class="p">)</span><span class="x">
+	</span><span class="n">c</span><span class="o">.</span><span class="n">wg</span><span class="o">.</span><span class="n">Wait</span><span class="p">()</span><span class="x">
+	</span><span class="k">if</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="o">!=</span><span class="x"> </span><span class="no">nil</span><span class="x"> </span><span class="p">{</span><span class="x">
+		</span><span class="k">return</span><span class="x"> </span><span class="no">nil</span><span class="p">,</span><span class="x"> </span><span class="n">err</span><span class="x">
+	</span><span class="p">}</span><span class="x">
+	</span><span class="c">// check if any of the last few calculations failed</span><span class="x">
+	</span><span class="k">select</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="k">case</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="o">&lt;-</span><span class="n">c</span><span class="o">.</span><span class="n">errs</span><span class="o">:</span><span class="x">
+		</span><span class="c">// yep, we failed before calculating all checksums</span><span class="x">
+		</span><span class="k">return</span><span class="x"> </span><span class="no">nil</span><span class="p">,</span><span class="x"> </span><span class="n">err</span><span class="x">
+	</span><span class="k">default</span><span class="o">:</span><span class="x">
+		</span><span class="c">// no errors were reported and c.wg.Wait() ensures that</span><span class="x">
+		</span><span class="c">// all goroutines have stopped running. This means</span><span class="x">
+		</span><span class="c">// the entire run was successful!</span><span class="x">
+	</span><span class="p">}</span><span class="x">
+	</span><span class="k">return</span><span class="x"> </span><span class="n">c</span><span class="o">.</span><span class="n">acc</span><span class="o">.</span><span class="n">checksums</span><span class="p">(),</span><span class="x"> </span><span class="no">nil</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="k">type</span><span class="x"> </span><span class="n">checksum</span><span class="x"> </span><span class="k">struct</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="n">filepath</span><span class="x"> </span><span class="kt">string</span><span class="x">
+	</span><span class="n">sum</span><span class="x">      </span><span class="p">[]</span><span class="kt">byte</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="k">func</span><span class="x"> </span><span class="p">(</span><span class="n">c</span><span class="x"> </span><span class="o">*</span><span class="n">checksum</span><span class="p">)</span><span class="x"> </span><span class="n">String</span><span class="p">()</span><span class="x"> </span><span class="kt">string</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="k">return</span><span class="x"> </span><span class="n">base64</span><span class="o">.</span><span class="n">StdEncoding</span><span class="o">.</span><span class="n">EncodeToString</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">sum</span><span class="p">)</span><span class="x"> </span><span class="o">+</span><span class="x"> </span><span class="s">" "</span><span class="x"> </span><span class="o">+</span><span class="x"> </span><span class="n">c</span><span class="o">.</span><span class="n">filepath</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="k">type</span><span class="x"> </span><span class="n">checksums</span><span class="x"> </span><span class="k">struct</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="n">lk</span><span class="x">   </span><span class="n">sync</span><span class="o">.</span><span class="n">Mutex</span><span class="x">
+	</span><span class="n">sums</span><span class="x"> </span><span class="p">[]</span><span class="n">checksum</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="k">func</span><span class="x"> </span><span class="p">(</span><span class="n">cs</span><span class="x"> </span><span class="o">*</span><span class="n">checksums</span><span class="p">)</span><span class="x"> </span><span class="n">add</span><span class="p">(</span><span class="n">sum</span><span class="x"> </span><span class="n">checksum</span><span class="p">)</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="n">cs</span><span class="o">.</span><span class="n">lk</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span><span class="x">
+	</span><span class="n">cs</span><span class="o">.</span><span class="n">sums</span><span class="x"> </span><span class="o">=</span><span class="x"> </span><span class="nb">append</span><span class="p">(</span><span class="n">cs</span><span class="o">.</span><span class="n">sums</span><span class="p">,</span><span class="x"> </span><span class="n">sum</span><span class="p">)</span><span class="x">
+	</span><span class="n">cs</span><span class="o">.</span><span class="n">lk</span><span class="o">.</span><span class="n">Unlock</span><span class="p">()</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="k">func</span><span class="x"> </span><span class="p">(</span><span class="n">cs</span><span class="x"> </span><span class="o">*</span><span class="n">checksums</span><span class="p">)</span><span class="x"> </span><span class="n">checksums</span><span class="p">()</span><span class="x"> </span><span class="p">[]</span><span class="n">checksum</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="k">return</span><span class="x"> </span><span class="n">cs</span><span class="o">.</span><span class="n">sums</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="k">func</span><span class="x"> </span><span class="n">checksumFile</span><span class="p">(</span><span class="n">path</span><span class="x"> </span><span class="kt">string</span><span class="p">,</span><span class="x"> </span><span class="n">c</span><span class="x"> </span><span class="n">ctrl</span><span class="p">)</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="k">defer</span><span class="x"> </span><span class="n">c</span><span class="o">.</span><span class="n">wg</span><span class="o">.</span><span class="n">Done</span><span class="p">()</span><span class="x">
+	</span><span class="c">// open the file</span><span class="x">
+	</span><span class="n">file</span><span class="p">,</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="n">os</span><span class="o">.</span><span class="n">Open</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="x">
+	</span><span class="k">if</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="o">!=</span><span class="x"> </span><span class="no">nil</span><span class="x"> </span><span class="p">{</span><span class="x">
+		</span><span class="n">notifyErr</span><span class="p">(</span><span class="n">c</span><span class="p">,</span><span class="x"> </span><span class="n">err</span><span class="p">)</span><span class="x">
+		</span><span class="k">return</span><span class="x">
+	</span><span class="p">}</span><span class="x">
+	</span><span class="k">defer</span><span class="x"> </span><span class="n">file</span><span class="o">.</span><span class="n">Close</span><span class="p">()</span><span class="x">
+
+	</span><span class="c">// checksum its contents</span><span class="x">
+	</span><span class="n">hash</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="n">md5</span><span class="o">.</span><span class="n">New</span><span class="p">()</span><span class="x">
+	</span><span class="k">if</span><span class="x"> </span><span class="n">_</span><span class="p">,</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="n">io</span><span class="o">.</span><span class="n">Copy</span><span class="p">(</span><span class="n">hash</span><span class="p">,</span><span class="x"> </span><span class="n">file</span><span class="p">);</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="o">!=</span><span class="x"> </span><span class="no">nil</span><span class="x"> </span><span class="p">{</span><span class="x">
+		</span><span class="n">notifyErr</span><span class="p">(</span><span class="n">c</span><span class="p">,</span><span class="x"> </span><span class="n">err</span><span class="p">)</span><span class="x">
+		</span><span class="k">return</span><span class="x">
+	</span><span class="p">}</span><span class="x">
+	</span><span class="n">c</span><span class="o">.</span><span class="n">acc</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">checksum</span><span class="p">{</span><span class="n">path</span><span class="p">,</span><span class="x"> </span><span class="n">hash</span><span class="o">.</span><span class="n">Sum</span><span class="p">(</span><span class="no">nil</span><span class="p">)})</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="k">func</span><span class="x"> </span><span class="n">notifyErr</span><span class="p">(</span><span class="n">c</span><span class="x"> </span><span class="n">ctrl</span><span class="p">,</span><span class="x"> </span><span class="n">err</span><span class="x"> </span><span class="kt">error</span><span class="p">)</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="c">// Notify the producer of the error.</span><span class="x">
+	</span><span class="c">// If there's already an error on the channel,</span><span class="x">
+	</span><span class="c">// don't bother adding another one, just exit.</span><span class="x">
+	</span><span class="k">select</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="k">case</span><span class="x"> </span><span class="n">c</span><span class="o">.</span><span class="n">errs</span><span class="x"> </span><span class="o">&lt;-</span><span class="x"> </span><span class="n">err</span><span class="o">:</span><span class="x">
+	</span><span class="k">default</span><span class="o">:</span><span class="x">
+	</span><span class="p">}</span><span class="x">
+</span><span class="p">}</span></code></pre></figure>
+
+<p>I’m not a big fan of unbounded processes and this program will spawn a new goroutine for every file
+as quickly as it can walk the directory tree. Throttling the process to a maximum number of concurrent goroutines
+is luckily very easy.</p>
+
+<figure class="highlight"><pre><code class="language-go" data-lang="go"><span class="c">// throttle implements a semaphore used to limit the number</span><span class="x">
+</span><span class="c">// of concurrent calculateChecksum workers.</span><span class="x">
+</span><span class="k">type</span><span class="x"> </span><span class="n">throttle</span><span class="x"> </span><span class="k">chan</span><span class="x"> </span><span class="k">struct</span><span class="p">{}</span><span class="x">
+
+</span><span class="k">func</span><span class="x"> </span><span class="n">newThrottle</span><span class="p">(</span><span class="n">n</span><span class="x"> </span><span class="kt">int</span><span class="p">)</span><span class="x"> </span><span class="n">throttle</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="n">t</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="nb">make</span><span class="p">(</span><span class="n">throttle</span><span class="p">,</span><span class="x"> </span><span class="n">n</span><span class="p">)</span><span class="x">
+	</span><span class="k">for</span><span class="x"> </span><span class="n">ii</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="m">0</span><span class="p">;</span><span class="x"> </span><span class="n">ii</span><span class="x"> </span><span class="o">&lt;</span><span class="x"> </span><span class="n">n</span><span class="p">;</span><span class="x"> </span><span class="n">ii</span><span class="o">++</span><span class="x"> </span><span class="p">{</span><span class="x">
+		</span><span class="n">t</span><span class="o">.</span><span class="n">ready</span><span class="p">()</span><span class="x">
+	</span><span class="p">}</span><span class="x">
+	</span><span class="k">return</span><span class="x"> </span><span class="n">t</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="k">func</span><span class="x"> </span><span class="p">(</span><span class="n">t</span><span class="x"> </span><span class="n">throttle</span><span class="p">)</span><span class="x"> </span><span class="n">wait</span><span class="p">()</span><span class="x">  </span><span class="p">{</span><span class="x"> </span><span class="o">&lt;-</span><span class="n">t</span><span class="x"> </span><span class="p">}</span><span class="x">
+</span><span class="k">func</span><span class="x"> </span><span class="p">(</span><span class="n">t</span><span class="x"> </span><span class="n">throttle</span><span class="p">)</span><span class="x"> </span><span class="n">ready</span><span class="p">()</span><span class="x"> </span><span class="p">{</span><span class="x"> </span><span class="n">t</span><span class="x"> </span><span class="o">&lt;-</span><span class="x"> </span><span class="k">struct</span><span class="p">{}{}</span><span class="x"> </span><span class="p">}</span></code></pre></figure>
+
+<p>We use the throttle in our code as follows</p>
+
+<figure class="highlight"><pre><code class="language-go" data-lang="go"><span class="k">type</span><span class="x"> </span><span class="n">ctrl</span><span class="x"> </span><span class="k">struct</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="o">...</span><span class="x">
+	</span><span class="c">// semaphore to throttle the number of concurrent reads</span><span class="x">
+	</span><span class="n">throttle</span><span class="x"> </span><span class="n">throttle</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="k">func</span><span class="x"> </span><span class="n">WalkPath</span><span class="p">(</span><span class="o">...</span><span class="p">)</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="o">...</span><span class="x">
+	</span><span class="k">const</span><span class="x"> </span><span class="n">numWorkers</span><span class="x"> </span><span class="o">=</span><span class="x"> </span><span class="m">10</span><span class="x">
+	</span><span class="c">// setup the control structure</span><span class="x">
+	</span><span class="n">c</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="n">ctrl</span><span class="p">{</span><span class="x">
+		</span><span class="o">...</span><span class="x">
+		</span><span class="n">newThrottle</span><span class="p">(</span><span class="n">numWorkers</span><span class="p">),</span><span class="x">
+	</span><span class="p">}</span><span class="x">
+	</span><span class="o">...</span><span class="x">
+
+	</span><span class="n">fn</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="k">func</span><span class="p">(</span><span class="o">...</span><span class="p">)</span><span class="x"> </span><span class="kt">error</span><span class="x"> </span><span class="p">{</span><span class="x">
+		</span><span class="o">...</span><span class="x">
+		</span><span class="n">c</span><span class="o">.</span><span class="n">throttle</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span><span class="x">
+		</span><span class="n">c</span><span class="o">.</span><span class="n">wg</span><span class="o">.</span><span class="n">Add</span><span class="p">(</span><span class="m">1</span><span class="p">)</span><span class="x">
+		</span><span class="k">go</span><span class="x"> </span><span class="n">checksumFile</span><span class="p">(</span><span class="n">path</span><span class="p">,</span><span class="x"> </span><span class="n">c</span><span class="p">)</span><span class="x">
+		</span><span class="k">return</span><span class="x"> </span><span class="no">nil</span><span class="x">
+	</span><span class="p">}</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="k">func</span><span class="x"> </span><span class="n">checksumFile</span><span class="p">(</span><span class="n">path</span><span class="x"> </span><span class="kt">string</span><span class="p">,</span><span class="x"> </span><span class="n">c</span><span class="x"> </span><span class="n">ctrl</span><span class="p">)</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="k">defer</span><span class="x"> </span><span class="n">c</span><span class="o">.</span><span class="n">wg</span><span class="o">.</span><span class="n">Done</span><span class="p">()</span><span class="x">
+	</span><span class="k">defer</span><span class="x"> </span><span class="n">c</span><span class="o">.</span><span class="n">throttle</span><span class="o">.</span><span class="n">ready</span><span class="p">()</span><span class="x">
+	</span><span class="o">...</span><span class="x">
+</span><span class="p">}</span></code></pre></figure>
+
+<p>Very simple, and I feel much happier with bounded resource usage.</p>
+
+<p>Let’s run it again.</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="o">[</span>gustav@gpaul-dell <span class="nb">test</span><span class="o">]</span><span class="nv">$ </span>go run walk.go 
+07BzhNET7exJ6qYjitX/AA<span class="o">==</span> /dev/shm/test/foo
+<span class="nv">7HhE4vOBPKVjHlsV2Alqxg</span><span class="o">==</span> /dev/shm/test/walk.go
+KnJaKj3+S4Dgehm7s3BsWw<span class="o">==</span> /dev/shm/test/baz/more
+wVenkDHhxA+FkxgpvF/FUg<span class="o">==</span> /dev/shm/test/bar</code></pre></figure>
+
+<p>What happended to the sort order? os.Walk is cool enough to walk the directory tree in order and start our goroutines in order, too. However, this doesn’t ensure that they finish in order! We need to sort
+the results when we finish accumulating them concurrently.</p>
+
+<figure class="highlight"><pre><code class="language-go" data-lang="go"><span class="k">package</span><span class="x"> </span><span class="n">main</span><span class="x">
+
+</span><span class="k">import</span><span class="x"> </span><span class="p">(</span><span class="x">
+	</span><span class="o">...</span><span class="x">
+	</span><span class="s">"sort"</span><span class="x">
+</span><span class="p">)</span><span class="x">
+
+</span><span class="o">...</span><span class="x">
+
+</span><span class="k">type</span><span class="x"> </span><span class="n">checksums</span><span class="x"> </span><span class="k">struct</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="n">lk</span><span class="x">   </span><span class="n">sync</span><span class="o">.</span><span class="n">Mutex</span><span class="x">
+	</span><span class="n">sums</span><span class="x"> </span><span class="p">[]</span><span class="n">checksum</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="k">func</span><span class="x"> </span><span class="p">(</span><span class="n">cs</span><span class="x"> </span><span class="o">*</span><span class="n">checksums</span><span class="p">)</span><span class="x"> </span><span class="n">add</span><span class="p">(</span><span class="n">sum</span><span class="x"> </span><span class="n">checksum</span><span class="p">)</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="o">...</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="k">func</span><span class="x"> </span><span class="p">(</span><span class="n">cs</span><span class="x"> </span><span class="o">*</span><span class="n">checksums</span><span class="p">)</span><span class="x"> </span><span class="n">checksums</span><span class="p">()</span><span class="x"> </span><span class="p">[]</span><span class="n">checksum</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="n">sort</span><span class="o">.</span><span class="n">Sort</span><span class="p">(</span><span class="n">cs</span><span class="p">)</span><span class="x">
+	</span><span class="k">return</span><span class="x"> </span><span class="n">cs</span><span class="o">.</span><span class="n">sums</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="k">func</span><span class="x"> </span><span class="p">(</span><span class="n">cs</span><span class="x"> </span><span class="o">*</span><span class="n">checksums</span><span class="p">)</span><span class="x"> </span><span class="n">Len</span><span class="p">()</span><span class="x"> </span><span class="kt">int</span><span class="x"> </span><span class="p">{</span><span class="x"> </span><span class="k">return</span><span class="x"> </span><span class="nb">len</span><span class="p">(</span><span class="n">cs</span><span class="o">.</span><span class="n">sums</span><span class="p">)</span><span class="x"> </span><span class="p">}</span><span class="x">
+</span><span class="k">func</span><span class="x"> </span><span class="p">(</span><span class="n">cs</span><span class="x"> </span><span class="o">*</span><span class="n">checksums</span><span class="p">)</span><span class="x"> </span><span class="n">Less</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="x"> </span><span class="n">j</span><span class="x"> </span><span class="kt">int</span><span class="p">)</span><span class="x"> </span><span class="kt">bool</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="k">return</span><span class="x"> </span><span class="n">cs</span><span class="o">.</span><span class="n">sums</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">filepath</span><span class="x"> </span><span class="o">&lt;</span><span class="x"> </span><span class="n">cs</span><span class="o">.</span><span class="n">sums</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="o">.</span><span class="n">filepath</span><span class="x">
+</span><span class="p">}</span><span class="x">
+</span><span class="k">func</span><span class="x"> </span><span class="p">(</span><span class="n">cs</span><span class="x"> </span><span class="o">*</span><span class="n">checksums</span><span class="p">)</span><span class="x"> </span><span class="n">Swap</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="x"> </span><span class="n">j</span><span class="x"> </span><span class="kt">int</span><span class="p">)</span><span class="x"> </span><span class="p">{</span><span class="x">
+	</span><span class="n">cs</span><span class="o">.</span><span class="n">sums</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="x"> </span><span class="n">cs</span><span class="o">.</span><span class="n">sums</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="x"> </span><span class="o">=</span><span class="x"> </span><span class="n">cs</span><span class="o">.</span><span class="n">sums</span><span class="p">[</span><span class="n">j</span><span class="p">],</span><span class="x"> </span><span class="n">cs</span><span class="o">.</span><span class="n">sums</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="x">
+</span><span class="p">}</span></code></pre></figure>
+
+<p>This was a pretty involved example, but hopefully you learnt as much following along as I did writing it. If this example was wrapped in a library then you could happily use it with the knowledge that there are no zombie goroutines hanging around when the call to WalkPath() returns. I think that is crucial for any library code that
+wants to spawn goroutines.</p>
+
+<p>On that note, don’t spawn goroutines in library code if it isn’t necessary, it clutters
+the stack trace when the client application crashes and adds unnecessary scheduling overhead to the client application.</p>
+
+  </div>
+
+</article>
+
+      </div>
+    </div>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Gustav Paul</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li>Gustav Paul</li>
+          <li><a href="mailto:my name and surname @ gmail.com">my name and surname @ gmail.com</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col footer-col-2">
+        <ul class="social-media-list">
+          
+          <li>
+            <a href="https://github.com/gpaul"><span class="icon icon--github"><svg viewBox="0 0 16 16"><path fill="#828282" d="M7.999,0.431c-4.285,0-7.76,3.474-7.76,7.761 c0,3.428,2.223,6.337,5.307,7.363c0.388,0.071,0.53-0.168,0.53-0.374c0-0.184-0.007-0.672-0.01-1.32 c-2.159,0.469-2.614-1.04-2.614-1.04c-0.353-0.896-0.862-1.135-0.862-1.135c-0.705-0.481,0.053-0.472,0.053-0.472 c0.779,0.055,1.189,0.8,1.189,0.8c0.692,1.186,1.816,0.843,2.258,0.645c0.071-0.502,0.271-0.843,0.493-1.037 C4.86,11.425,3.049,10.76,3.049,7.786c0-0.847,0.302-1.54,0.799-2.082C3.768,5.507,3.501,4.718,3.924,3.65 c0,0,0.652-0.209,2.134,0.796C6.677,4.273,7.34,4.187,8,4.184c0.659,0.003,1.323,0.089,1.943,0.261 c1.482-1.004,2.132-0.796,2.132-0.796c0.423,1.068,0.157,1.857,0.077,2.054c0.497,0.542,0.798,1.235,0.798,2.082 c0,2.981-1.814,3.637-3.543,3.829c0.279,0.24,0.527,0.713,0.527,1.437c0,1.037-0.01,1.874-0.01,2.129 c0,0.208,0.14,0.449,0.534,0.373c3.081-1.028,5.302-3.935,5.302-7.362C15.76,3.906,12.285,0.431,7.999,0.431z"/></svg>
+</span><span class="username">gpaul</span></a>
+
+          </li>
+          
+
+          
+          <li>
+            <a href="https://twitter.com/gpaul2"><span class="icon icon--twitter"><svg viewBox="0 0 16 16"><path fill="#828282" d="M15.969,3.058c-0.586,0.26-1.217,0.436-1.878,0.515c0.675-0.405,1.194-1.045,1.438-1.809c-0.632,0.375-1.332,0.647-2.076,0.793c-0.596-0.636-1.446-1.033-2.387-1.033c-1.806,0-3.27,1.464-3.27,3.27 c0,0.256,0.029,0.506,0.085,0.745C5.163,5.404,2.753,4.102,1.14,2.124C0.859,2.607,0.698,3.168,0.698,3.767 c0,1.134,0.577,2.135,1.455,2.722C1.616,6.472,1.112,6.325,0.671,6.08c0,0.014,0,0.027,0,0.041c0,1.584,1.127,2.906,2.623,3.206 C3.02,9.402,2.731,9.442,2.433,9.442c-0.211,0-0.416-0.021-0.615-0.059c0.416,1.299,1.624,2.245,3.055,2.271 c-1.119,0.877-2.529,1.4-4.061,1.4c-0.264,0-0.524-0.015-0.78-0.046c1.447,0.928,3.166,1.469,5.013,1.469 c6.015,0,9.304-4.983,9.304-9.304c0-0.142-0.003-0.283-0.009-0.423C14.976,4.29,15.531,3.714,15.969,3.058z"/></svg>
+</span><span class="username">gpaul2</span></a>
+
+          </li>
+          
+        </ul>
+      </div>
+
+      <div class="footer-col footer-col-3">
+        <p>Some thoughts - technical and otherwise
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>

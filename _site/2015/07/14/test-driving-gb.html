@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>test-driving gb</title>
+  <meta name="description" content="I’m going to give gb a try. Dave Cheney is a cool guy and I’ve been hearing a lot about it.">
+
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="canonical" href="http://gpaul.github.io/2015/07/14/test-driving-gb.html">
+  <link rel="alternate" type="application/rss+xml" title="Gustav Paul" href="http://gpaul.github.io/feed.xml">
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Gustav Paul</a>
+
+    <nav class="site-nav">
+      <a href="#" class="menu-icon">
+        <svg viewBox="0 0 18 15">
+          <path fill="#424242" d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.031C17.335,0,18,0.665,18,1.484L18,1.484z"/>
+          <path fill="#424242" d="M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0c0-0.82,0.665-1.484,1.484-1.484 h15.031C17.335,6.031,18,6.696,18,7.516L18,7.516z"/>
+          <path fill="#424242" d="M18,13.516C18,14.335,17.335,15,16.516,15H1.484C0.665,15,0,14.335,0,13.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.031C17.335,12.031,18,12.696,18,13.516L18,13.516z"/>
+        </svg>
+      </a>
+
+      <div class="trigger">
+        
+          
+          <a class="page-link" href="/about/">About</a>
+          
+        
+          
+        
+          
+        
+          
+        
+      </div>
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <div class="page-content">
+      <div class="wrapper">
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title" itemprop="name headline">test-driving gb</h1>
+    <p class="post-meta"><time datetime="2015-07-14T10:49:00+00:00" itemprop="datePublished">Jul 14, 2015</time></p>
+  </header>
+
+  <div class="post-content" itemprop="articleBody">
+    <p>I’m going to give gb a try. Dave Cheney is a cool guy and I’ve been hearing a lot about it.</p>
+
+<p>I’ve learned a shitload by watching colleagues work, seeing how they think, learning 
+about new tools and generally seeing my local maxima for what they were. (perl -ne is awesome.)</p>
+
+<p>As such I’m going to experiment with a ‘watch over my shoulder’ style for this post.</p>
+
+<h2 id="installation">Installation</h2>
+
+<p>The <a href="http://getgb.io/docs/install/">installation docs</a> are pretty simple. Let’s hit it.</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="gp">$ </span>mkdir ~/test-gb
+<span class="gp">$ </span><span class="nb">cd</span> !<span class="err">$</span>
+<span class="nb">cd</span> ~/test-gb
+<span class="gp">$ </span><span class="nb">export </span><span class="nv">GOPATH</span><span class="o">=</span><span class="sb">`</span><span class="nb">pwd</span><span class="sb">`</span>
+<span class="gp">$ </span>go get github.com/constabulary/gb/...
+<span class="err">$</span></code></pre></figure>
+
+<p>I’m a fan of verbose output. Let’s do that properly</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="gp">$ </span>rm -rf bin pkg src
+<span class="gp">$ </span>go get -v github.com/constabulary/gb/...
+github.com/constabulary/gb <span class="o">(</span>download<span class="o">)</span>
+github.com/constabulary/gb
+github.com/constabulary/gb/cmd
+github.com/constabulary/gb/cmd/gb-vendor/vendor
+github.com/constabulary/gb/cmd/gb
+github.com/constabulary/gb/cmd/gb-vendor</code></pre></figure>
+
+<p>I find that output much more satisfying.</p>
+
+<p>I imagine that command dropped ‘gb’ in the bin directory, let’s check:</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="gp">$ </span>ls bin
+gb  gb-vendor</code></pre></figure>
+
+<p>I was expecting ‘gb’, but ‘gb-vendor’ … that’s suspicious. Maybe the help text
+proves insightful.</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="gp">$ </span>./bin/gb-vendor -help
+FATAL could not locate project root: project root is blank</code></pre></figure>
+
+<p>The fact that we see a FATAL log instead of useful help text let’s me think gb-vendor doesn’t take any command line flags. It also means this isn’t a case of simply missing a config file, as you’d expect something like config file location to be a flag. This leaves one option: environment variables. This is a fairly obscure way to pass configuration to a binary when said binary doesn’t have any usage text - unless this binary is not intended to be run manually.</p>
+
+<p>All this from running a Go binary with -help. I think <a href="https://github.com/constabulary/gb/pull/265">we could do with better usage text</a>. Be right back…</p>
+
+<p>…back. It turns out that the usage text for this binary is actually pretty solid - gb-vendor just isn’t intended to be run by hand. Instead, it is a plugin intended to be run by the gb command when you run ‘gb vendor’.</p>
+
+<p>The specific problem is that it checks an environment variable ‘GB_PROJECT_DIR’ first thing. When that’s blank, we’re met with the FATAL log. I patched the main function to print help text first.</p>
+
+<p>Now we’re met with the following:</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="gp">$ </span>./bin/gb-vendor
+gb-vendor, a gb plugin to manage your vendored dependencies.
+
+Usage:
+
+        gb vendor <span class="nb">command</span> <span class="o">[</span>arguments]
+
+The commands are:
+
+        fetch       fetch a remote dependency
+        update      update a <span class="nb">local </span>dependency
+        list        lists dependencies, one per line
+        delete      deletes a <span class="nb">local </span>dependency
+        purge       purges all unreferenced dependencies
+
+Use <span class="s2">"gb vendor help [command]"</span> <span class="k">for </span>more information about a command.
+
+Additional <span class="nb">help </span>topics:
+
+
+Use <span class="s2">"gb vendor help [topic]"</span> <span class="k">for </span>more information about that topic.</code></pre></figure>
+
+<p>That’s way better. For one, it’s now clear that this binary really ought to
+be run as ‘gb vendor’ - gb will run the gb-vendor binary for us. This is why the
+assumption that the environment variable is present isn’t that strange - it’s actually totally sensible.</p>
+
+<h2 id="my-first-gb-command">My first gb command</h2>
+
+<p>The <a href="http://getgb.io">getgb.io</a> website says ‘gb’ is 
+“a project based build tool for the Go programming language.” It’s a replacement
+for the standard ‘go’ tool. I work on a project of several hundred thousand lines of go code, with tens of external repositories pulled into our repo as git subtrees and it works very well. As such I’m in no hurry to drop the go tool, but the point of this post is to have a look at gb, so let’s go.</p>
+
+<p>Let’s try to build our GOPATH.</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="gp">$ </span>gb
+gb, a project based build tool <span class="k">for </span>the Go programming language.
+
+Usage:
+
+        gb <span class="nb">command</span> <span class="o">[</span>arguments]
+
+The commands are:
+
+        build       build a package
+        depset      
+        doc         show documentation <span class="k">for </span>a package or symbol
+        env         print project environment variables
+        generate    generate Go files by processing <span class="nb">source
+        </span>list        list the packages named by the importpaths
+        plugin      run a plugin
+        <span class="nb">test        test </span>packages
+
+Use <span class="s2">"gb help [command]"</span> <span class="k">for </span>more information about a command.
+
+Additional <span class="nb">help </span>topics:
+
+        project     gb project layout
+
+Use <span class="s2">"gb help [topic]"</span> <span class="k">for </span>more information about that topic.</code></pre></figure>
+
+<p>Of those, <em>build</em> and <em>env</em> look pretty interesting.</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="gp">$ </span>./bin/gb env
+<span class="nv">GB_PROJECT_DIR</span><span class="o">=</span><span class="s2">"/home/gustav/test-gb"</span></code></pre></figure>
+
+<p>Ha! That’s exactly the environment variable the gb-vendor was missing. Makes sense.</p>
+
+<p>Let’s try <em>build</em>.</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="gp">$ </span>./bin/gb build
+github.com/constabulary/gb
+github.com/constabulary/gb/cmd
+github.com/constabulary/gb/cmd/gb-vendor/vendor
+github.com/constabulary/gb/cmd/gb
+github.com/constabulary/gb/cmd/gb-vendor</code></pre></figure>
+
+<p>Pretty sweet. The go tool’s build is idempotent, let’s see about gb’s.</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="gp">$ </span>./bin/gb build
+github.com/constabulary/gb/cmd/gb
+github.com/constabulary/gb/cmd/gb-vendor
+<span class="gp">$ </span>./bin/gb build
+github.com/constabulary/gb/cmd/gb
+github.com/constabulary/gb/cmd/gb-vendor</code></pre></figure>
+
+<p>From the output I’m guessing it rebuilds the binaries. Let’s check that</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="gp">$ </span>strace -f -q -e open ./bin/gb build
+...
+<span class="o">[</span>pid  8425] open<span class="o">(</span><span class="s2">"/home/gustav/test-gb/src/github.com/constabulary/gb/cmd/resolve_test.go"</span>, O_RDONLY|O_CLOEXEC<span class="o">)</span> <span class="o">=</span> 3
+<span class="o">[</span>pid  8425] open<span class="o">(</span><span class="s2">"/home/gustav/test-gb/src/github.com/constabulary/gb/cmd/test.go"</span>, O_RDONLY|O_CLOEXEC<span class="o">)</span> <span class="o">=</span> 3
+<span class="o">[</span>pid  8425] open<span class="o">(</span><span class="s2">"/home/gustav/test-gb/src/github.com/constabulary/gb/cmd/test_test.go"</span>, O_RDONLY|O_CLOEXEC<span class="o">)</span> <span class="o">=</span> 3
+<span class="o">[</span>pid  8425] open<span class="o">(</span><span class="s2">"/home/gustav/test-gb/src/github.com/constabulary/gb/cmd/testflag.go"</span>, O_RDONLY|O_CLOEXEC<span class="o">)</span> <span class="o">=</span> 3
+...
+github.com/constabulary/gb/cmd/gb
+github.com/constabulary/gb/cmd/gb-vendor
+...
+<span class="o">[</span>pid  8432] open<span class="o">(</span><span class="s2">"/home/gustav/test-gb/bin/gb-vendor"</span>, O_WRONLY|O_CREAT|O_TRUNC, 0775<span class="o">)</span> <span class="o">=</span> 3
+<span class="o">[</span>pid  8432] open<span class="o">(</span><span class="s2">"/dev/shm/gb185198689/github.com/constabulary/gb/cmd/gb-vendor/main.a"</span>, O_RDONLY<span class="o">)</span> <span class="o">=</span> 4
+<span class="o">[</span>pid  8432] open<span class="o">(</span><span class="s2">"/home/gustav/go/pkg/linux_amd64/runtime.a"</span>, O_RDONLY<span class="o">)</span> <span class="o">=</span> 4
+...
+<span class="o">[</span>pid  8433] open<span class="o">(</span><span class="s2">"/home/gustav/test-gb/bin/gb"</span>, O_WRONLY|O_CREAT|O_TRUNC, 0775<span class="o">)</span> <span class="o">=</span> 3
+<span class="o">[</span>pid  8433] open<span class="o">(</span><span class="s2">"/dev/shm/gb185198689/github.com/constabulary/gb/cmd/gb/main.a"</span>, O_RDONLY<span class="o">)</span> <span class="o">=</span> 4
+<span class="o">[</span>pid  8433] open<span class="o">(</span><span class="s2">"/home/gustav/go/pkg/linux_amd64/runtime.a"</span>, O_RDONLY<span class="o">)</span> <span class="o">=</span> 4
+<span class="o">[</span>pid  8432] open<span class="o">(</span><span class="s2">"/home/gustav/go/pkg/linux_amd64/flag.a"</span>, O_RDONLY<span class="o">)</span> <span class="o">=</span> 4
+...</code></pre></figure>
+
+<table>
+  <tbody>
+    <tr>
+      <td>It seems like it reads the source files in your project root and decides what to rebuild. In our case all the archive files were up to date. It then relinks the binaries (O_CREAT</td>
+      <td>O_TRUNC) means it truncates the existing binaries if they exist and creates them if they don’t.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>You should really consider using strace for everything. I use it very regularly and I love it. It shows you everything a program does except memory access (it shows mallocs!) and computation - which is often more than enough to see where problems lie. It’s also really good for reading consolidated log output from processes that have the annoying habit of logging to multiple files - or when that process executes in a separate mount namespace and dumps its logs in its data directory (I’m looking at you leveldb.)</p>
+
+<h2 id="a-new-project">A new project</h2>
+
+<p>I want to start a new project. I’ll leave gb where it is and add the bin directory to my PATH.</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="gp">$ </span><span class="nb">echo </span><span class="nv">PATH</span><span class="o">=</span><span class="nv">$PATH</span>:/home/gustav/test-gb/bin &gt;&gt; ~/.bash_profile
+<span class="gp">$ </span><span class="nb">source</span> !<span class="err">$</span>
+<span class="nb">source</span> ~/.bash_profile
+<span class="gp">$ </span>which gb
+~/test-gb/bin/gb</code></pre></figure>
+
+<p>Excellent.</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="gp">$ </span>mkdir ~/gb-first-project
+<span class="gp">$ </span><span class="nb">cd</span> !<span class="err">$</span>
+<span class="nb">cd</span> ~/gb-first-project
+<span class="gp">$ </span>mkdir -p src/myproject/cmd/project
+<span class="gp">$ </span>cat <span class="sh">&lt;&lt;EOF &gt; src/myproject/cmd/project/main.go
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("first gb project!")
+}
+$ gb build
+myproject/cmd/project
+$ ./bin/project
+</span><span class="err">first gb project!</span></code></pre></figure>
+
+<p>That was very straight-forward. Exactly the same flow as the go tool thus far. If you were expecting something spectacular you’re missing the point. I don’t want my build tools to be spectacular, I want them to do as little
+as possible without making me do a bunch of stuff myself. I expect gb to come into its own only once
+you start to add third-party dependencies. Before then it shouldn’t surprise you.</p>
+
+<h2 id="adding-a-third-party-dependency-with-gb">Adding a third-party dependency with gb</h2>
+
+<p>Let’s add <a href="https://github.com/gogo/protobuf">gogoprotobuf</a> as a dependency. It’s
+always just a matter of time before I add it to any new project anyway, let’s
+add it while we’re still fresh. I use it for everything. I smile every time I merge it into a new project. 
+The author is also a good friend of mine and if you knew how seriously he takes software testing and code quality you would import his code, too.</p>
+
+<p>The gogoprotobuf README says to install it by running</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash">go get github.com/gogo/protobuf/proto
+go get github.com/gogo/protobuf/protoc-gen-gogo
+go get github.com/gogo/protobuf/gogoproto</code></pre></figure>
+
+<p>I’m going to use the ‘gb vendor’ command I patched earlier. We’ll use ‘gb fetch’ instead of ‘go get’.</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="gp">$ </span>gb vendor fetch github.com/gogo/protobuf/proto
+fetching recursive dependency github.com/gogo/protobuf/proto/testdata
+<span class="gp">$ </span>gb vendor fetch github.com/gogo/protobuf/protoc-gen-gogo
+fetching recursive dependency github.com/gogo/protobuf/gogoproto
+fetching recursive dependency github.com/gogo/protobuf/plugin/defaultcheck
+fetching recursive dependency github.com/gogo/protobuf/plugin/description
+fetching recursive dependency github.com/gogo/protobuf/plugin/embedcheck
+fetching recursive dependency github.com/gogo/protobuf/plugin/enumstringer
+fetching recursive dependency github.com/gogo/protobuf/plugin/equal
+fetching recursive dependency github.com/gogo/protobuf/plugin/face
+fetching recursive dependency github.com/gogo/protobuf/plugin/gostring
+fetching recursive dependency github.com/gogo/protobuf/plugin/marshalto
+fetching recursive dependency github.com/gogo/protobuf/plugin/populate
+fetching recursive dependency github.com/gogo/protobuf/plugin/size
+fetching recursive dependency github.com/gogo/protobuf/plugin/stringer
+fetching recursive dependency github.com/gogo/protobuf/plugin/testgen
+fetching recursive dependency github.com/gogo/protobuf/plugin/union
+fetching recursive dependency github.com/gogo/protobuf/plugin/unmarshal
+<span class="gp">$ </span>gb vendor fetch github.com/gogo/protobuf/gogoproto
+FATAL <span class="nb">command</span> <span class="s2">"fetch"</span> failed: github.com/gogo/protobuf/gogoproto is already vendored
+FATAL <span class="nb">command</span> <span class="s2">"vendor"</span> failed: <span class="nb">exit </span>status 1</code></pre></figure>
+
+<p>So far so good. Its interesting to note that ‘gb vendor’ sees fetching of an already vendored package as a fatal error. There’s a separate cmd ‘gb vendor update’ to update it.</p>
+
+<p>Let’s check our source tree.</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="gp">$ </span>find . -maxdepth 1 -type d 
+.
+./src
+./vendor
+./pkg
+./bin
+<span class="gp">$ </span>find src/ -maxdepth 3 -type d
+src/
+src/myproject
+src/myproject/cmd
+src/myproject/cmd/project
+<span class="gp">$ </span>find vendor -maxdepth 4 -type d 
+vendor
+vendor/src
+vendor/src/github.com
+vendor/src/github.com/gogo
+vendor/src/github.com/gogo/protobuf</code></pre></figure>
+
+<p>So ‘gb vendor’ didn’t touch our src directory. Instead it created a vendor/src directory and pulled the gogoprotobuf sources in there.</p>
+
+<p>Right now we don’t use any gogoprotobuf code in our main.go file. Let’s do a contrived import so we’re sure it is being pulled into the binary.</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="gp">$ </span>cat <span class="sh">&lt;&lt;EOF &gt; src/myproject/cmd/project/main.go
+package main
+
+import (
+	"fmt"
+	"github.com/gogo/protobuf/proto"
+)
+
+func main() {
+	dummy := "first gb project!"
+	fmt.Printf("%s %p\n", dummy, proto.String(dummy))
+</span><span class="err">}</span></code></pre></figure>
+
+<p>Let’s rebuild the binary</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="gp">$ </span>gb build
+myproject/cmd/project
+<span class="gp">$ </span>./bin/project
+first gb project! 0xc20800a360</code></pre></figure>
+
+<p>Cool, that does what I thought it does. Let’s recheck our src directory.</p>
+
+<figure class="highlight"><pre><code class="language-bash" data-lang="bash"><span class="gp">$ </span>find src/ -maxdepth 3 -type d
+src/
+src/myproject
+src/myproject/cmd
+src/myproject/cmd/project
+<span class="gp">$ </span>find vendor -maxdepth 4 -type d 
+vendor
+vendor/src
+vendor/src/github.com
+vendor/src/github.com/gogo
+vendor/src/github.com/gogo/protobuf</code></pre></figure>
+
+<p>It didn’t touch our src directory. That’s … pretty damn cool. I’m so used to
+having my src directory cluttered with shit I didn’t write that I’ve forgotten
+what it feels like to browse ./src and see only my code. It takes me back to my ruby days where third party code is shipped as opaque ‘gems’. Dealing with third-party dependencies on the source level has definitely made me a better programmer and I would find it difficult to go back to a world where I simply trust the library maintainer not to screw up.</p>
+
+<p>Some early thoughts on gb follow. I don’t think you can really like or disqualify tooling on a 10 line program - you need a few thousand lines at least, but I’ve already seen some cool stuff.</p>
+
+<p>It seems like ‘gb’ gives me the best of both worlds: I have all the sources I’m depending on, but it is away from the code I wrote, the code I generally want to grep and sed through. What I enjoy quite a lot about gb’s approach is that I can start out using it and if I don’t like it six months down the line I can just fold the gb vendor/src directory into my regular src directory and I’m back in go tool land.</p>
+
+<p>I’m about to switch back to my day job and a 500k+ loc go tool-based project but I’m a little sad to leave my clean src directory behind. I like gb’s plugin scheme which allows something as integral as the vendor command to be implemented externally. I think go’s authors are all about bringing new team members on board and have them hit the ground running. For that you want to strongly emphasize convention over configuration - in fact you want no configuration. Plugins allow different teams to slowly drift apart in their processes. If you’re a small team and people aren’t moving between teams in your company I think doing some manual tooling in the form of build system plugins is a fine idea.</p>
+
+<p>I’m a fan of git’s update and post-receive hooks for checking that code is fmt’ed, imports are clean, and generated code hasn’t changed by accident. These all count as per-project configuration that doesn’t translate to other teams. It is also extremely useful and have prevented many bugs.</p>
+
+<p>One thing I don’t envy about maintaining gb is that people will expect it to track the go tool in functionality and Dave says he explicitly doesn’t want to just wrap the go tool. I look forward to seeing where gb goes, especially now that the go tool also supports explicit vendoring of sources.</p>
+
+  </div>
+
+</article>
+
+      </div>
+    </div>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Gustav Paul</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li>Gustav Paul</li>
+          <li><a href="mailto:my name and surname @ gmail.com">my name and surname @ gmail.com</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col footer-col-2">
+        <ul class="social-media-list">
+          
+          <li>
+            <a href="https://github.com/gpaul"><span class="icon icon--github"><svg viewBox="0 0 16 16"><path fill="#828282" d="M7.999,0.431c-4.285,0-7.76,3.474-7.76,7.761 c0,3.428,2.223,6.337,5.307,7.363c0.388,0.071,0.53-0.168,0.53-0.374c0-0.184-0.007-0.672-0.01-1.32 c-2.159,0.469-2.614-1.04-2.614-1.04c-0.353-0.896-0.862-1.135-0.862-1.135c-0.705-0.481,0.053-0.472,0.053-0.472 c0.779,0.055,1.189,0.8,1.189,0.8c0.692,1.186,1.816,0.843,2.258,0.645c0.071-0.502,0.271-0.843,0.493-1.037 C4.86,11.425,3.049,10.76,3.049,7.786c0-0.847,0.302-1.54,0.799-2.082C3.768,5.507,3.501,4.718,3.924,3.65 c0,0,0.652-0.209,2.134,0.796C6.677,4.273,7.34,4.187,8,4.184c0.659,0.003,1.323,0.089,1.943,0.261 c1.482-1.004,2.132-0.796,2.132-0.796c0.423,1.068,0.157,1.857,0.077,2.054c0.497,0.542,0.798,1.235,0.798,2.082 c0,2.981-1.814,3.637-3.543,3.829c0.279,0.24,0.527,0.713,0.527,1.437c0,1.037-0.01,1.874-0.01,2.129 c0,0.208,0.14,0.449,0.534,0.373c3.081-1.028,5.302-3.935,5.302-7.362C15.76,3.906,12.285,0.431,7.999,0.431z"/></svg>
+</span><span class="username">gpaul</span></a>
+
+          </li>
+          
+
+          
+          <li>
+            <a href="https://twitter.com/gpaul2"><span class="icon icon--twitter"><svg viewBox="0 0 16 16"><path fill="#828282" d="M15.969,3.058c-0.586,0.26-1.217,0.436-1.878,0.515c0.675-0.405,1.194-1.045,1.438-1.809c-0.632,0.375-1.332,0.647-2.076,0.793c-0.596-0.636-1.446-1.033-2.387-1.033c-1.806,0-3.27,1.464-3.27,3.27 c0,0.256,0.029,0.506,0.085,0.745C5.163,5.404,2.753,4.102,1.14,2.124C0.859,2.607,0.698,3.168,0.698,3.767 c0,1.134,0.577,2.135,1.455,2.722C1.616,6.472,1.112,6.325,0.671,6.08c0,0.014,0,0.027,0,0.041c0,1.584,1.127,2.906,2.623,3.206 C3.02,9.402,2.731,9.442,2.433,9.442c-0.211,0-0.416-0.021-0.615-0.059c0.416,1.299,1.624,2.245,3.055,2.271 c-1.119,0.877-2.529,1.4-4.061,1.4c-0.264,0-0.524-0.015-0.78-0.046c1.447,0.928,3.166,1.469,5.013,1.469 c6.015,0,9.304-4.983,9.304-9.304c0-0.142-0.003-0.283-0.009-0.423C14.976,4.29,15.531,3.714,15.969,3.058z"/></svg>
+</span><span class="username">gpaul2</span></a>
+
+          </li>
+          
+        </ul>
+      </div>
+
+      <div class="footer-col footer-col-3">
+        <p>Some thoughts - technical and otherwise
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>
