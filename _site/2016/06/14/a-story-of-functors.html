@@ -192,7 +192,7 @@ operates on a <em>Person</em> object and returns a <em>Person</em> object. We sh
 	</span><span class="n">node</span><span class="x"> </span><span class="n">Person</span><span class="x">
 	</span><span class="n">children</span><span class="x"> </span><span class="p">[]</span><span class="n">Person</span><span class="x">
 </span><span class="p">}</span><span class="x">
-</span><span class="k">func</span><span class="x"> </span><span class="p">(</span><span class="n">pt</span><span class="p">)</span><span class="x"> </span><span class="n">Walk</span><span class="p">(</span><span class="n">fn</span><span class="x"> </span><span class="k">func</span><span class="p">(</span><span class="n">Person</span><span class="p">)</span><span class="x"> </span><span class="n">Person</span><span class="p">)</span><span class="x"> </span><span class="n">PersonTree</span><span class="x"> </span><span class="p">{</span><span class="x"> </span><span class="o">...</span><span class="x"> </span><span class="p">}</span><span class="x">
+</span><span class="k">func</span><span class="x"> </span><span class="p">(</span><span class="n">pt</span><span class="x"> </span><span class="n">PersonTree</span><span class="p">)</span><span class="x"> </span><span class="n">Walk</span><span class="p">(</span><span class="n">fn</span><span class="x"> </span><span class="k">func</span><span class="p">(</span><span class="n">Person</span><span class="p">)</span><span class="x"> </span><span class="n">Person</span><span class="p">)</span><span class="x"> </span><span class="n">PersonTree</span><span class="x"> </span><span class="p">{</span><span class="x"> </span><span class="o">...</span><span class="x"> </span><span class="p">}</span><span class="x">
 
 </span><span class="c">// now becoming</span><span class="x">
 
@@ -213,6 +213,70 @@ operates on a <em>Person</em> object and returns a <em>Person</em> object. We sh
 a more abstract level, all this is really simple. In fact, Gawie’s code really just takes a <em>Functor</em> and <em>fmap</em>’s a transformation over it.</p>
 
 <p>For no discernable reason Sannie is soon alone at the watercooler. Did one of her team mates hang around just a bit longer than the others? Maybe she should tell that dude about <em>fold</em>’s, they’re super neat.</p>
+
+<p>UPDATE (30-07-2016): I’ve learned more about Functors! You might be confused by the assertion that any type that implements ‘Fmap’ is called a Functor. This isn’t quite true. I mean, I can implement Fmap and have it just print something to the screen. The Fmap function needs to satisfy two very specific properties (which our examples all do.) This first is that if you call Fmap with the identity function it should return the unmodified original structure:</p>
+
+<figure class="highlight"><pre><code class="language-go" data-lang="go"><span class="k">func</span><span class="x"> </span><span class="p">(</span><span class="n">pt</span><span class="x"> </span><span class="n">PersonTree</span><span class="p">)</span><span class="x"> </span><span class="n">Fmap</span><span class="p">(</span><span class="n">fn</span><span class="x"> </span><span class="k">func</span><span class="p">(</span><span class="n">Person</span><span class="p">)</span><span class="x"> </span><span class="n">Person</span><span class="p">)</span><span class="x"> </span><span class="n">PersonTree</span><span class="x"> </span><span class="p">{</span><span class="x">
+     </span><span class="k">return</span><span class="x"> </span><span class="n">pt</span><span class="o">.</span><span class="n">Walk</span><span class="p">(</span><span class="n">fn</span><span class="p">)</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="k">func</span><span class="x"> </span><span class="n">identity</span><span class="p">(</span><span class="n">person</span><span class="x"> </span><span class="n">Person</span><span class="p">)</span><span class="x"> </span><span class="n">Person</span><span class="x"> </span><span class="p">{</span><span class="x">
+    </span><span class="k">return</span><span class="x"> </span><span class="n">person</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="n">reflect</span><span class="o">.</span><span class="n">DeepEqual</span><span class="p">(</span><span class="n">tree</span><span class="p">,</span><span class="x"> </span><span class="n">tree</span><span class="o">.</span><span class="n">Fmap</span><span class="p">(</span><span class="n">identity</span><span class="p">))</span><span class="x">
+</span><span class="err">#</span><span class="o">=&gt;</span><span class="x"> </span><span class="no">true</span></code></pre></figure>
+
+<p>The second is that it should ‘preserve structure’ which means Fmap of two nested functions should be the same as two Fmap operations. Confusing as crap until you see the example:</p>
+
+<figure class="highlight"><pre><code class="language-go" data-lang="go"><span class="k">func</span><span class="x"> </span><span class="n">upcase</span><span class="p">(</span><span class="n">person</span><span class="x"> </span><span class="n">Person</span><span class="p">)</span><span class="x"> </span><span class="n">Person</span><span class="x"> </span><span class="p">{</span><span class="x">
+     </span><span class="n">person</span><span class="o">.</span><span class="n">first_name</span><span class="x"> </span><span class="o">=</span><span class="x"> </span><span class="n">strings</span><span class="o">.</span><span class="n">ToUpper</span><span class="p">(</span><span class="n">person</span><span class="o">.</span><span class="n">first_name</span><span class="p">)</span><span class="x">
+     </span><span class="n">person</span><span class="o">.</span><span class="n">last_name</span><span class="x"> </span><span class="o">=</span><span class="x"> </span><span class="n">strings</span><span class="o">.</span><span class="n">ToUpper</span><span class="p">(</span><span class="n">person</span><span class="o">.</span><span class="n">last_name</span><span class="p">)</span><span class="x">
+     </span><span class="n">person</span><span class="o">.</span><span class="n">full_name</span><span class="x"> </span><span class="o">=</span><span class="x"> </span><span class="n">strings</span><span class="o">.</span><span class="n">ToUpper</span><span class="p">(</span><span class="n">person</span><span class="o">.</span><span class="n">full_name</span><span class="p">)</span><span class="x">
+     </span><span class="k">return</span><span class="x"> </span><span class="n">person</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="k">func</span><span class="x"> </span><span class="n">l33tify</span><span class="p">(</span><span class="n">person</span><span class="x"> </span><span class="n">Person</span><span class="p">)</span><span class="x"> </span><span class="n">Person</span><span class="x"> </span><span class="p">{</span><span class="x">
+     </span><span class="n">person</span><span class="o">.</span><span class="n">first_name</span><span class="x"> </span><span class="o">=</span><span class="x"> </span><span class="n">l33tifyStr</span><span class="p">(</span><span class="n">person</span><span class="o">.</span><span class="n">first_name</span><span class="p">)</span><span class="x">
+     </span><span class="n">person</span><span class="o">.</span><span class="n">last_name</span><span class="x"> </span><span class="o">=</span><span class="x"> </span><span class="n">l33tifyStr</span><span class="p">(</span><span class="n">person</span><span class="o">.</span><span class="n">last_name</span><span class="p">)</span><span class="x">
+     </span><span class="n">person</span><span class="o">.</span><span class="n">full_name</span><span class="x"> </span><span class="o">=</span><span class="x"> </span><span class="n">l33tifyStr</span><span class="p">(</span><span class="n">person</span><span class="o">.</span><span class="n">full_name</span><span class="p">)</span><span class="x">
+     </span><span class="k">return</span><span class="x"> </span><span class="n">person</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="k">func</span><span class="x"> </span><span class="n">l33tifyStr</span><span class="p">(</span><span class="n">str</span><span class="x"> </span><span class="kt">string</span><span class="p">)</span><span class="x"> </span><span class="kt">string</span><span class="x"> </span><span class="p">{</span><span class="x">
+     </span><span class="n">l33ts</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="k">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">string</span><span class="p">{</span><span class="x">
+     	   </span><span class="s">"e"</span><span class="o">:</span><span class="x"> </span><span class="s">"3"</span><span class="p">,</span><span class="x">
+     	   </span><span class="s">"E"</span><span class="o">:</span><span class="x"> </span><span class="s">"3"</span><span class="p">,</span><span class="x">
+     	   </span><span class="s">"a"</span><span class="o">:</span><span class="x"> </span><span class="s">"4"</span><span class="p">,</span><span class="x">
+     	   </span><span class="s">"A"</span><span class="o">:</span><span class="x"> </span><span class="s">"4"</span><span class="p">,</span><span class="x">
+     </span><span class="p">}</span><span class="x">
+     </span><span class="k">for</span><span class="x"> </span><span class="n">before</span><span class="p">,</span><span class="x"> </span><span class="n">after</span><span class="x"> </span><span class="o">:=</span><span class="x"> </span><span class="k">range</span><span class="x"> </span><span class="n">l33ts</span><span class="x"> </span><span class="p">{</span><span class="x">
+     	 </span><span class="n">str</span><span class="x"> </span><span class="o">=</span><span class="x"> </span><span class="n">strings</span><span class="o">.</span><span class="n">Replace</span><span class="p">(</span><span class="n">str</span><span class="p">,</span><span class="x"> </span><span class="n">before</span><span class="p">,</span><span class="x"> </span><span class="n">after</span><span class="p">,</span><span class="x"> </span><span class="o">-</span><span class="m">1</span><span class="p">)</span><span class="x">
+     </span><span class="p">}</span><span class="x">
+     </span><span class="k">return</span><span class="x"> </span><span class="n">str</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="k">func</span><span class="x"> </span><span class="n">l33tifyThenUpcase</span><span class="p">(</span><span class="n">person</span><span class="x"> </span><span class="n">Person</span><span class="p">)</span><span class="x"> </span><span class="n">Person</span><span class="x"> </span><span class="p">{</span><span class="x">
+     </span><span class="k">return</span><span class="x"> </span><span class="n">upcase</span><span class="p">(</span><span class="n">l33tify</span><span class="p">(</span><span class="n">person</span><span class="p">))</span><span class="x">
+</span><span class="p">}</span><span class="x">
+
+</span><span class="n">reflect</span><span class="o">.</span><span class="n">DeepEqual</span><span class="p">(</span><span class="x">
+	</span><span class="n">tree</span><span class="o">.</span><span class="n">Fmap</span><span class="p">(</span><span class="n">l33tifyThenUpcase</span><span class="p">),</span><span class="x">
+	</span><span class="n">tree</span><span class="o">.</span><span class="n">Fmap</span><span class="p">(</span><span class="n">l33tify</span><span class="p">)</span><span class="o">.</span><span class="n">Fmap</span><span class="p">(</span><span class="n">upcase</span><span class="p">)</span><span class="x">
+</span><span class="p">)</span><span class="x">
+</span><span class="err">#</span><span class="o">=&gt;</span><span class="x"> </span><span class="no">true</span></code></pre></figure>
+
+<p>Now - I may still be wrong as I’m not yet strong with the Haskells - but I’m pretty sure this is at least <em>more</em> correct.</p>
+
+<p>The cool thing about all the maths behind this is that it works exactly the way we hoped it would. It is so intuitive that (similar to our starting examples) you just build the thing the way you would anyway and it turns out that it’s a functor. I think about these mathematical properties as guard rails: some clever dude or dudette did the mental heavy-lifting and proved that these two properties were sufficient to completely define this amazing class of transformations called Functors.</p>
+
+<p>Without these properties stated so formally, you’d never <em>really</em> know that it works the way you think it does, you’d just have a good feeling about it and maybe smile at the obvious elegance of your abstraction. Refactoring would be stressful as you’d never know whether stuff like changing the order of evaluation of the elements in your structure might screw things up, or whether some case left out of a switch statement could leave an entire class of structures broken after the transformation.</p>
+
+<p>Since you’ve broken the whole idea down into two very simple properties you can use a property-based testing tool like QuickCheck to test millions of different instances of your structure and make sure that these properties always hold even through major refactoring.</p>
+
+<p>Don’t miss out on the certainty and peace of mind that the formal reasoning gives you - with which you can refactor fearlessly as your tests will complain if you stop satisfying the required properties.</p>
+
+<p>To learning!</p>
 
   </div>
 

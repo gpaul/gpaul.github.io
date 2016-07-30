@@ -164,7 +164,7 @@ type PersonTree struct {
 	node Person
 	children []Person
 }
-func (pt) Walk(fn func(Person) Person) PersonTree { ... }
+func (pt PersonTree) Walk(fn func(Person) Person) PersonTree { ... }
 
 // now becoming
 
@@ -187,3 +187,73 @@ To cruise along with the cool kids Sannie renames her _Walk()_ functions to _Fma
 a more abstract level, all this is really simple. In fact, Gawie's code really just takes a _Functor_ and _fmap_'s a transformation over it.
 
 For no discernable reason Sannie is soon alone at the watercooler. Did one of her team mates hang around just a bit longer than the others? Maybe she should tell that dude about _fold_'s, they're super neat.
+
+UPDATE (30-07-2016): I've learned more about Functors! You might be confused by the assertion that any type that implements 'Fmap' is called a Functor. This isn't quite true. I mean, I can implement Fmap and have it just print something to the screen. The Fmap function needs to satisfy two very specific properties (which our examples all do.) This first is that if you call Fmap with the identity function it should return the unmodified original structure:
+
+{% highlight go %}
+
+func (pt PersonTree) Fmap(fn func(Person) Person) PersonTree {
+     return pt.Walk(fn)
+}
+
+func identity(person Person) Person {
+    return person
+}
+
+reflect.DeepEqual(tree, tree.Fmap(identity))
+#=> true
+{% endhighlight %}
+
+The second is that it should 'preserve structure' which means Fmap of two nested functions should be the same as two Fmap operations. Confusing as crap until you see the example:
+
+{% highlight go %}
+
+func upcase(person Person) Person {
+     person.first_name = strings.ToUpper(person.first_name)
+     person.last_name = strings.ToUpper(person.last_name)
+     person.full_name = strings.ToUpper(person.full_name)
+     return person
+}
+
+func l33tify(person Person) Person {
+     person.first_name = l33tifyStr(person.first_name)
+     person.last_name = l33tifyStr(person.last_name)
+     person.full_name = l33tifyStr(person.full_name)
+     return person
+}
+
+func l33tifyStr(str string) string {
+     l33ts := map[string]string{
+     	   "e": "3",
+     	   "E": "3",
+     	   "a": "4",
+     	   "A": "4",
+     }
+     for before, after := range l33ts {
+     	 str = strings.Replace(str, before, after, -1)
+     }
+     return str
+}
+
+func l33tifyThenUpcase(person Person) Person {
+     return upcase(l33tify(person))
+}
+
+reflect.DeepEqual(
+	tree.Fmap(l33tifyThenUpcase),
+	tree.Fmap(l33tify).Fmap(upcase)
+)
+#=> true
+{% endhighlight %}
+
+Now - I may still be wrong as I'm not yet strong with the Haskells - but I'm pretty sure this is at least *more* correct.
+
+The cool thing about all the maths behind this is that it works exactly the way we hoped it would. It is so intuitive that (similar to our starting examples) you just build the thing the way you would anyway and it turns out that it's a functor. I think about these mathematical properties as guard rails: some clever dude or dudette did the mental heavy-lifting and proved that these two properties were sufficient to completely define this amazing class of transformations called Functors.
+
+Without these properties stated so formally, you'd never *really* know that it works the way you think it does, you'd just have a good feeling about it and maybe smile at the obvious elegance of your abstraction. Refactoring would be stressful as you'd never know whether stuff like changing the order of evaluation of the elements in your structure might screw things up, or whether some case left out of a switch statement could leave an entire class of structures broken after the transformation. 
+
+Since you've broken the whole idea down into two very simple properties you can use a property-based testing tool like QuickCheck to test millions of different instances of your structure and make sure that these properties always hold even through major refactoring.
+
+Don't miss out on the certainty and peace of mind that the formal reasoning gives you - with which you can refactor fearlessly as your tests will complain if you stop satisfying the required properties.
+
+To learning!
